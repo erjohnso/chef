@@ -239,10 +239,12 @@ describe Chef::Node do
     end
 
     it "does not allow you to set an attribute via method_missing" do
+      Chef::Config[:treat_deprecation_warnings_as_errors] = false
       expect { node.sunshine = "is bright" }.to raise_error(Chef::Exceptions::ImmutableAttributeModification)
     end
 
     it "should allow you get get an attribute via method_missing" do
+      Chef::Config[:treat_deprecation_warnings_as_errors] = false
       node.default.sunshine = "is bright"
       expect(node.sunshine).to eql("is bright")
     end
@@ -286,6 +288,7 @@ describe Chef::Node do
       end
 
       it "auto-vivifies attributes created via method syntax" do
+        Chef::Config[:treat_deprecation_warnings_as_errors] = false
         node.normal.fuu.bahrr.baz = "qux"
         expect(node.fuu.bahrr.baz).to eq("qux")
       end
@@ -350,6 +353,7 @@ describe Chef::Node do
       end
 
       it "auto-vivifies attributes created via method syntax" do
+        Chef::Config[:treat_deprecation_warnings_as_errors] = false
         node.default.fuu.bahrr.baz = "qux"
         expect(node.fuu.bahrr.baz).to eq("qux")
       end
@@ -388,6 +392,7 @@ describe Chef::Node do
       end
 
       it "auto-vivifies attributes created via method syntax" do
+        Chef::Config[:treat_deprecation_warnings_as_errors] = false
         node.override.fuu.bahrr.baz = "qux"
         expect(node.fuu.bahrr.baz).to eq("qux")
       end
@@ -727,6 +732,7 @@ describe Chef::Node do
     #
     describe "deep merge attribute cache edge conditions" do
       it "does not error with complicated attribute substitution" do
+        Chef::Config[:treat_deprecation_warnings_as_errors] = false
         node.default["chef_attribute_hell"]["attr1"] = "attribute1"
         node.default["chef_attribute_hell"]["attr2"] = "#{node.chef_attribute_hell.attr1}/attr2"
         expect { node.default["chef_attribute_hell"]["attr3"] = "#{node.chef_attribute_hell.attr2}/attr3" }.not_to raise_error
@@ -741,6 +747,7 @@ describe Chef::Node do
       end
 
       it "method interpolation syntax also works" do
+        Chef::Config[:treat_deprecation_warnings_as_errors] = false
         node.default["passenger"]["version"]     = "4.0.57"
         node.default["passenger"]["root_path"]   = "passenger-#{node['passenger']['version']}"
         node.default["passenger"]["root_path_2"] = "passenger-#{node.passenger['version']}"
@@ -750,6 +757,7 @@ describe Chef::Node do
     end
 
     it "should raise an ArgumentError if you ask for an attribute that doesn't exist via method_missing" do
+      Chef::Config[:treat_deprecation_warnings_as_errors] = false
       expect { node.sunshine }.to raise_error(NoMethodError)
     end
 
@@ -810,8 +818,8 @@ describe Chef::Node do
 
     it "should add json attributes to the node" do
       node.consume_external_attrs(@ohai_data, { "one" => "two", "three" => "four" })
-      expect(node.one).to eql("two")
-      expect(node.three).to eql("four")
+      expect(node["one"]).to eql("two")
+      expect(node["three"]).to eql("four")
     end
 
     it "should set the tags attribute to an empty array if it is not already defined" do
@@ -845,17 +853,17 @@ describe Chef::Node do
 
     it "deep merges attributes instead of overwriting them" do
       node.consume_external_attrs(@ohai_data, "one" => { "two" => { "three" => "four" } })
-      expect(node.one.to_hash).to eq({ "two" => { "three" => "four" } })
+      expect(node["one"].to_hash).to eq({ "two" => { "three" => "four" } })
       node.consume_external_attrs(@ohai_data, "one" => { "abc" => "123" })
       node.consume_external_attrs(@ohai_data, "one" => { "two" => { "foo" => "bar" } })
-      expect(node.one.to_hash).to eq({ "two" => { "three" => "four", "foo" => "bar" }, "abc" => "123" })
+      expect(node["one"].to_hash).to eq({ "two" => { "three" => "four", "foo" => "bar" }, "abc" => "123" })
     end
 
     it "gives attributes from JSON priority when deep merging" do
       node.consume_external_attrs(@ohai_data, "one" => { "two" => { "three" => "four" } })
-      expect(node.one.to_hash).to eq({ "two" => { "three" => "four" } })
+      expect(node["one"].to_hash).to eq({ "two" => { "three" => "four" } })
       node.consume_external_attrs(@ohai_data, "one" => { "two" => { "three" => "forty-two" } })
-      expect(node.one.to_hash).to eq({ "two" => { "three" => "forty-two" } })
+      expect(node["one"].to_hash).to eq({ "two" => { "three" => "forty-two" } })
     end
 
   end
@@ -1057,10 +1065,10 @@ describe Chef::Node do
     end
 
     it "sets attributes from the files" do
-      expect(node.ldap_server).to eql("ops1prod")
-      expect(node.ldap_basedn).to eql("dc=hjksolutions,dc=com")
-      expect(node.ldap_replication_password).to eql("forsure")
-      expect(node.smokey).to eql("robinson")
+      expect(node["ldap_server"]).to eql("ops1prod")
+      expect(node["ldap_basedn"]).to eql("dc=hjksolutions,dc=com")
+      expect(node["ldap_replication_password"]).to eql("forsure")
+      expect(node["smokey"]).to eql("robinson")
     end
 
     it "gives a sensible error when attempting to load a missing attributes file" do
@@ -1104,8 +1112,8 @@ describe Chef::Node do
     it "should load a node from a ruby file" do
       node.from_file(File.expand_path(File.join(CHEF_SPEC_DATA, "nodes", "test.rb")))
       expect(node.name).to eql("test.example.com-short")
-      expect(node.sunshine).to eql("in")
-      expect(node.something).to eql("else")
+      expect(node["sunshine"]).to eql("in")
+      expect(node["something"]).to eql("else")
       expect(node.run_list).to eq(["operations-master", "operations-monitoring"])
     end
 

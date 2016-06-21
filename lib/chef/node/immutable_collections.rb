@@ -167,7 +167,9 @@ class Chef
       end
 
       def method_missing(symbol, *args)
-        if args.empty?
+        if symbol == :to_ary
+          super
+        elsif args.empty?
           if key?(symbol)
             self[symbol]
           else
