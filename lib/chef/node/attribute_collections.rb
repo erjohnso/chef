@@ -191,13 +191,37 @@ class Chef
         chain[last] = value
       end
 
-      # can trainwreck with NoMethodError and does not autovifify
+      # this autovivifies, but can throw NoMethodError when trying to access #[] on
+      # something that is not a container.
       def write!(*path, value)
         obj = path.inject(self) { |memo, key| memo[key] }
         root.reset_cache
         obj[last] = value
       end
 
+      # return true or false based on if the attribute exists
+      def exist?(*path)
+        path.inject(self) do |memo, key|
+          if memo.is_a?(Hash)
+            if memo.key?(key)
+              memo[key]
+            else
+              return false
+            end
+          elsif memo.is_a?(Array)
+            if memo.length > key
+              memo[key]
+            else
+              return false
+            end
+          else
+            return false
+          end
+        end
+        return true
+      end
+
+      # this is a safe non-autovivifying reader that returns nil if the attribute does not exist
       def read(*path)
         begin
           read!(*path)
@@ -206,8 +230,12 @@ class Chef
         end
       end
 
+      # non-autovivifying reader that throws an exception if the attribute does not exist
       def read!(*path)
-        path.inject(self) { |memo, key| memo[key] }
+        raise NoMethodError unless exist?(*path)
+        path.inject(self) do |memo, key|
+          memo[key]
+        end
       end
 
       def unlink(*path, last)
