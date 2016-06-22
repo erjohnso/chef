@@ -62,8 +62,9 @@ class Chef
       # Node::Attribute object.
       MUTATOR_METHODS.each do |mutator|
         define_method(mutator) do |*args, &block|
+          ret = super(*args, &block)
           root.reset_cache(root.top_level_breadcrumb)
-          super(*args, &block)
+          ret
         end
       end
 
@@ -144,8 +145,9 @@ class Chef
 
       def []=(key, value)
         root.top_level_breadcrumb ||= key
+        ret = super
         root.reset_cache(root.top_level_breadcrumb)
-        super
+        ret
       end
 
       alias :attribute? :has_key?
@@ -175,7 +177,7 @@ class Chef
       def write(*path, last, value)
         prev_memo = prev_key = nil
         chain = path.inject(self) do |memo, key|
-          unless memo.respond_to?(:[])
+          if !(memo.is_a?(Array) || memo.is_a?(Hash)) || (memo.is_a?(Array) && !key.is_a?(Fixnum))
             prev_memo[prev_key] = {}
             memo = prev_memo[prev_key]
           end
@@ -183,21 +185,28 @@ class Chef
           prev_key = key
           memo[key]
         end
-        unless chain.respond_to?(:[]=)
+        if !(chain.is_a?(Array) || chain.is_a?(Hash)) || (chain.is_a?(Array) && !last.is_a?(Fixnum))
           prev_memo[prev_key] = {}
           chain = prev_memo[prev_key]
         end
-        root.reset_cache
         chain[last] = value
       end
 
-      # this autovivifies, but can throw NoMethodError when trying to access #[] on
-      # something that is not a container.
-      def write!(*path, value)
-        obj = path.inject(self) { |memo, key| memo[key] }
-        root.reset_cache
+      # this autovivifies, but can throw NoSuchAttribute when trying to access #[] on
+      # something that is not a container ("schema violation" issues).
+      #
+      def write!(*path, last, value)
+        obj = path.inject(self) do |memo, key|
+          raise Chef::Exceptions::AttributeTypeMismatch unless memo.is_a?(Array) || memo.is_a?(Hash)
+          raise Chef::Exceptions::AttributeTypeMismatch if memo.is_a?(Array) && !key.is_a?(Fixnum)
+          memo[key]
+        end
+        raise Chef::Exceptions::AttributeTypeMismatch unless obj.is_a?(Array) || obj.is_a?(Hash)
+        raise Chef::Exceptions::AttributeTypeMismatch if obj.is_a?(Array) && !last.is_a?(Fixnum)
         obj[last] = value
       end
+
+      # FIXME:(?) does anyone need a non-autovivifying writer for attributes that throws exceptions?
 
       # return true or false based on if the attribute exists
       def exist?(*path)
@@ -209,7 +218,9 @@ class Chef
               return false
             end
           elsif memo.is_a?(Array)
-            if memo.length > key
+            if !key.is_a?(Fixnum)
+              return false
+            elsif memo.length > key
               memo[key]
             else
               return false
@@ -225,18 +236,20 @@ class Chef
       def read(*path)
         begin
           read!(*path)
-        rescue NoMethodError
+        rescue Chef::Exceptions::NoSuchAttribute
           nil
         end
       end
 
       # non-autovivifying reader that throws an exception if the attribute does not exist
       def read!(*path)
-        raise NoMethodError unless exist?(*path)
+        raise Chef::Exceptions::NoSuchAttribute unless exist?(*path)
         path.inject(self) do |memo, key|
           memo[key]
         end
       end
+
+      # FIXME:(?) does anyone really like the autovivifying reader that we have and wants the same behavior?
 
       def unlink(*path, last)
         root.reset_cache

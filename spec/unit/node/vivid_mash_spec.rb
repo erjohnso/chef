@@ -27,7 +27,9 @@ describe Chef::Node::VividMash do
 
   let(:vivid) do
     expect(root).to receive(:reset_cache).at_least(:once).with(nil)
-    Chef::Node::VividMash.new(root, { "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    Chef::Node::VividMash.new(root,
+      { "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil }
+    )
   end
 
   context "#read" do
@@ -37,14 +39,29 @@ describe Chef::Node::VividMash do
       expect(root).not_to receive(:reset_cache)
     end
 
-    it "reads deeply" do
+    it "reads hashes deeply" do
       expect(root).to receive(:top_level_breadcrumb=).with("one").and_call_original
       expect(vivid.read("one", "two", "three")).to eql("four")
     end
 
-    it "does not trainwreck" do
+    it "does not trainwreck when hitting hash keys that do not exist" do
       expect(root).to receive(:top_level_breadcrumb=).with("one").and_call_original
       expect(vivid.read("one", "five", "six")).to eql(nil)
+    end
+
+    it "does not trainwreck when hitting an array with an out of bounds index" do
+      expect(root).to receive(:top_level_breadcrumb=).with("array").and_call_original
+      expect(vivid.read("array", 5, "one")).to eql(nil)
+    end
+
+    it "does not trainwreck when hitting an array with a string key" do
+      expect(root).to receive(:top_level_breadcrumb=).with("array").and_call_original
+      expect(vivid.read("array", "one", "two")).to eql(nil)
+    end
+
+    it "does not trainwreck when traversing a nil" do
+      expect(root).to receive(:top_level_breadcrumb=).with("nil").and_call_original
+      expect(vivid.read("nil", "one", "two")).to eql(nil)
     end
   end
 
@@ -115,20 +132,127 @@ describe Chef::Node::VividMash do
 
     it "throws an exception when attributes do not exist" do
       expect(root).to receive(:top_level_breadcrumb=).with("one").and_call_original
-      expect(vivid.read!("one", "five", "six")).to eql(nil)
+      expect { vivid.read!("one", "five", "six") }.to raise_error(Chef::Exceptions::NoSuchAttribute)
     end
 
     it "throws an exception when traversing a non-container" do
       expect(root).to receive(:top_level_breadcrumb=).with("one").and_call_original
-      expect(vivid.read!("one", "two", "three", "four")).to eql(nil)
+      expect { vivid.read!("one", "two", "three", "four") }.to raise_error(Chef::Exceptions::NoSuchAttribute)
     end
 
     it "throws an exception when an array element does not exist" do
       expect(root).to receive(:top_level_breadcrumb=).with("array").and_call_original
-      expect(vivid.read!("array", 3)).to eql(nil)
+      expect { vivid.read!("array", 3) }.to raise_error(Chef::Exceptions::NoSuchAttribute)
     end
   end
 
   context "#write" do
+    before do
+      vivid
+      expect(root).not_to receive(:reset_cache).with(nil)
+    end
+
+    it "should write into hashes" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("one")
+      vivid.write("one", "five", "six")
+      expect(vivid["one"]["five"]).to eql("six")
+    end
+
+    it "should deeply autovivify" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("one")
+      vivid.write("one", "five", "six", "seven", "eight", "nine", "ten")
+      expect(vivid["one"]["five"]["six"]["seven"]["eight"]["nine"]).to eql("ten")
+    end
+
+    it "should raise an exception if you overwrite an array with a hash" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("array")
+      vivid.write("array", "five", "six")
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => { "five" => "six" }, "nil" => nil })
+    end
+
+    it "should raise an exception if you traverse through an array with a hash" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("array")
+      vivid.write("array", "five", "six", "seven")
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => { "five" => { "six" => "seven" }}, "nil" => nil })
+    end
+
+    it "should raise an exception if you overwrite a string with a hash" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("one")
+      vivid.write("one", "two", "three", "four", "five")
+      expect(vivid).to eql({ "one" => { "two" => { "three" => { "four" => "five" } } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+
+    it "should raise an exception if you traverse through a string with a hash" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("one")
+      vivid.write("one", "two", "three", "four", "five", "six")
+      expect(vivid).to eql({ "one" => { "two" => { "three" => { "four" => { "five" => "six" } } } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+
+    it "should raise an exception if you overwrite a nil with a hash" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("nil")
+      vivid.write("nil", "one", "two")
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => { "one" => "two" } })
+    end
+
+    it "should raise an exception if you traverse through a nil with a hash" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("nil")
+      vivid.write("nil", "one", "two", "three")
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => { "one" => { "two" => "three" } } })
+    end
+  end
+
+  context "#write!" do
+    before do
+      vivid
+      expect(root).not_to receive(:reset_cache).with(nil)
+    end
+
+    it "should write into hashes" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("one")
+      vivid.write!("one", "five", "six")
+      expect(vivid["one"]["five"]).to eql("six")
+    end
+
+    it "should deeply autovivify" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("one")
+      vivid.write!("one", "five", "six", "seven", "eight", "nine", "ten")
+      expect(vivid["one"]["five"]["six"]["seven"]["eight"]["nine"]).to eql("ten")
+    end
+
+    it "should raise an exception if you overwrite an array with a hash" do
+      expect(root).not_to receive(:reset_cache)
+      expect { vivid.write!("array", "five", "six") }.to raise_error(Chef::Exceptions::AttributeTypeMismatch)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+
+    it "should raise an exception if you traverse through an array with a hash" do
+      expect(root).not_to receive(:reset_cache)
+      expect { vivid.write!("array", "five", "six", "seven") }.to raise_error(Chef::Exceptions::AttributeTypeMismatch)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+
+    it "should raise an exception if you overwrite a string with a hash" do
+      expect(root).not_to receive(:reset_cache)
+      expect { vivid.write!("one", "two", "three", "four", "five") }.to raise_error(Chef::Exceptions::AttributeTypeMismatch)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+
+    it "should raise an exception if you traverse through a string with a hash" do
+      expect(root).not_to receive(:reset_cache)
+      expect { vivid.write!("one", "two", "three", "four", "five", "six") }.to raise_error(Chef::Exceptions::AttributeTypeMismatch)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+
+    it "should raise an exception if you overwrite a nil with a hash" do
+      expect(root).not_to receive(:reset_cache)
+      expect { vivid.write!("nil", "one", "two") }.to raise_error(Chef::Exceptions::AttributeTypeMismatch)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+
+    it "should raise an exception if you traverse through a nil with a hash" do
+      expect(root).not_to receive(:reset_cache)
+      expect { vivid.write!("nil", "one", "two", "three") }.to raise_error(Chef::Exceptions::AttributeTypeMismatch)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
   end
 end
