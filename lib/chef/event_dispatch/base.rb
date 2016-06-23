@@ -43,6 +43,12 @@ class Chef
       def run_failed(exception)
       end
 
+      # Called when the run_context has been set up.
+      # Most helpful for event handlers that wish to inspect
+      # the resource collection.
+      def run_context_setup(run_context)
+      end
+
       # Called right after ohai runs.
       def ohai_completed(node)
       end

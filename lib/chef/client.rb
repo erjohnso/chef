@@ -278,6 +278,7 @@ class Chef
         do_windows_admin_check
 
         run_context = setup_run_context
+        events.run_context_setup(run_context)
 
         if Chef::Config[:audit_mode] != :audit_only
           converge_error = converge_and_save(run_context)

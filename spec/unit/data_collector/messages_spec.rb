@@ -67,7 +67,7 @@ describe Chef::DataCollector::Messages do
     let(:reporter_data) do
       {
         run_status: run_status,
-        completed_resources: [resource1, resource2],
+        resources: [resource1, resource2],
       }
     end
 

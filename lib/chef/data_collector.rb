@@ -51,17 +51,30 @@ class Chef
     # and exports its data through a webhook-like mechanism to a configured
     # endpoint.
     class Reporter < EventDispatch::Base
-      attr_reader :completed_resources, :status, :exception, :error_descriptions,
+      attr_reader :all_resource_reports, :status, :exception, :error_descriptions,
                   :expanded_run_list, :run_status, :http,
                   :current_resource_report, :enabled
 
       def initialize
-        @completed_resources     = []
+        @all_resource_reports    = []
         @current_resource_loaded = nil
         @error_descriptions      = {}
         @expanded_run_list       = {}
         @http                    = Chef::HTTP.new(data_collector_server_url)
         @enabled                 = true
+      end
+
+      # see EventDispatch::Base#run_context_setup
+      # Upon receipt, we will create a resource report for every
+      # resource in the resource collection. This is needed in
+      # order to send ALL resources to the Data Collector server
+      # regardless of whether or not they were processed.
+      def run_context_setup(run_context)
+        run_context.resource_collection.all_resources.each do |resource|
+          Array(resource.action).each do |action|
+            create_resource_report(resource, action)
+          end
+        end
       end
 
       # see EventDispatch::Base#run_started
@@ -100,13 +113,9 @@ class Chef
       # resource, and we only care about tracking top-level resources.
       def resource_current_state_loaded(new_resource, action, current_resource)
         return if nested_resource?(new_resource)
-        update_current_resource_report(
-          Chef::DataCollector::ResourceReport.new(
-            new_resource,
-            action,
-            current_resource
-          )
-        )
+        resource_report = find_or_create_resource_report(new_resource, action)
+        resource_report.current_resource = current_resource
+        update_current_resource_report(resource_report)
       end
 
       # see EventDispatch::Base#resource_up_to_date
@@ -116,19 +125,15 @@ class Chef
       end
 
       # see EventDispatch::Base#resource_skipped
-      # If this is a top-level resource, we create a ResourceReport instance
-      # (because a skipped resource does not trigger the
+      # If this is a top-level resource, we find the correct ResourceReport
+      # instance (because a skipped resource does not trigger the
       # resource_current_state_loaded event), and flag it as skipped.
       def resource_skipped(new_resource, action, conditional)
         return if nested_resource?(new_resource)
 
-        update_current_resource_report(
-          Chef::DataCollector::ResourceReport.new(
-            new_resource,
-            action
-          )
-        )
-        current_resource_report.skipped(conditional)
+        resource_report = find_or_create_resource_report(new_resource, action)
+        resource_report.skipped(conditional)
+        update_current_resource_report(resource_report)
       end
 
       # see EventDispatch::Base#resource_updated
@@ -154,13 +159,11 @@ class Chef
       end
 
       # see EventDispatch::Base#resource_completed
-      # Mark the ResourceReport instance as finished (for timing details)
-      # and add it to the list of resources encountered during this run.
+      # Mark the ResourceReport instance as finished (for timing details).
       # This marks the end of this resource during this run.
       def resource_completed(new_resource)
         if current_resource_report && !nested_resource?(new_resource)
           current_resource_report.finish
-          add_completed_resource(current_resource_report)
           update_current_resource_report(nil)
         end
       end
@@ -271,7 +274,7 @@ class Chef
           Chef::DataCollector::Messages.run_end_message(
             run_status: run_status,
             expanded_run_list: expanded_run_list,
-            completed_resources: completed_resources,
+            resources: all_resource_reports,
             status: opts[:status],
             error_descriptions: error_descriptions
           ).to_json
@@ -319,6 +322,32 @@ class Chef
 
       def update_error_description(discription_hash)
         @error_descriptions = discription_hash
+      end
+
+      def create_resource_report(resource, action)
+        report = Chef::DataCollector::ResourceReport.new(
+          resource,
+          action
+        )
+
+        @all_resource_reports << report
+
+        report
+      end
+
+      def find_or_create_resource_report(resource, action)
+        report = all_resource_reports.find do |r|
+          r.new_resource.class == resource.class &&
+            r.new_resource.name == resource.name &&
+            r.new_resource.source_line == resource.source_line &&
+            r.new_resource.action.include?(action)
+        end
+
+        if report.nil?
+          report = create_resource_report(resource, action)
+        end
+
+        report
       end
 
       # If we are getting messages about a resource while we are in the middle of
