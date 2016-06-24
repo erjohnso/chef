@@ -173,7 +173,7 @@ describe Chef::Node::VividMash do
     it "should raise an exception if you traverse through an array with a hash" do
       expect(root).to receive(:reset_cache).at_least(:once).with("array")
       vivid.write("array", "five", "six", "seven")
-      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => { "five" => { "six" => "seven" }}, "nil" => nil })
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => { "five" => { "six" => "seven" } }, "nil" => nil })
     end
 
     it "should raise an exception if you overwrite a string with a hash" do
@@ -252,6 +252,80 @@ describe Chef::Node::VividMash do
     it "should raise an exception if you traverse through a nil with a hash" do
       expect(root).not_to receive(:reset_cache)
       expect { vivid.write!("nil", "one", "two", "three") }.to raise_error(Chef::Exceptions::AttributeTypeMismatch)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+  end
+
+  context "#unlink" do
+    before do
+      vivid
+      expect(root).not_to receive(:reset_cache).with(nil)
+    end
+
+    it "should return nil if the keys already don't exist" do
+      expect(root).not_to receive(:reset_cache)
+      expect(vivid.unlink("five", "six", "seven", "eight")).to eql(nil)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+
+    it "should unlink hashes" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("one")
+      expect( vivid.unlink("one") ).to eql({ "two" => { "three" => "four" } })
+      expect(vivid).to eql({ "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+
+    it "should unlink array elements" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("array")
+      expect(vivid.unlink("array", 2)).to eql(2)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1 ], "nil" => nil })
+    end
+
+    it "should unlink nil" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("nil")
+      expect(vivid.unlink("nil")).to eql(nil)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ] })
+    end
+
+    it "should traverse a nil and safely do nothing" do
+      expect(root).not_to receive(:reset_cache)
+      expect(vivid.unlink("nil", "foo")).to eql(nil)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+  end
+
+  context "#unlink!" do
+    before do
+      vivid
+      expect(root).not_to receive(:reset_cache).with(nil)
+    end
+
+    it "should raise an exception if the keys already don't exist" do
+      expect(root).not_to receive(:reset_cache)
+      expect { vivid.unlink!("five", "six", "seven", "eight") }.to raise_error(Chef::Exceptions::NoSuchAttribute)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+
+    it "should unlink! hashes" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("one")
+      expect( vivid.unlink!("one") ).to eql({ "two" => { "three" => "four" } })
+      expect(vivid).to eql({ "array" => [ 0, 1, 2 ], "nil" => nil })
+    end
+
+    it "should unlink! array elements" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("array")
+      expect(vivid.unlink!("array", 2)).to eql(2)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1 ], "nil" => nil })
+    end
+
+    it "should unlink! nil" do
+      expect(root).to receive(:reset_cache).at_least(:once).with("nil")
+      expect(vivid.unlink!("nil")).to eql(nil)
+      expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ] })
+    end
+
+    it "should raise an exception if it traverses a nil" do
+      expect(root).not_to receive(:reset_cache)
+      expect { vivid.unlink!("nil", "foo") }.to raise_error(Chef::Exceptions::NoSuchAttribute)
       expect(vivid).to eql({ "one" => { "two" => { "three" => "four" } }, "array" => [ 0, 1, 2 ], "nil" => nil })
     end
   end

@@ -413,17 +413,14 @@ class Chef
         write(:force_override, *args, value)
       end
 
-       # method-style access to attributes
+      # method-style access to attributes
 
-      def write(level, *path, value)
-        self.send(level).write(*path, value)
-      end
-
-      def write!(level, *path, value)
-        self.send(level).write!(*path, value)
+      def exist?(*path)
+        raise "FIXME"
       end
 
       def read(*path)
+        raise "FIXME"
         begin
           read!(*path)
         rescue NoMethodError
@@ -432,7 +429,16 @@ class Chef
       end
 
       def read!(*path)
+        raise "FIXME"
         path.inject(self) { |memo, key| memo[key] }
+      end
+
+      def write(level, *path, value)
+        self.send(level).write(*path, value)
+      end
+
+      def write!(level, *path, value)
+        self.send(level).write!(*path, value)
       end
 
       def unlink(level, *path)

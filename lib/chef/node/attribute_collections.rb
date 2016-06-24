@@ -249,17 +249,18 @@ class Chef
         end
       end
 
-      # FIXME:(?) does anyone really like the autovivifying reader that we have and wants the same behavior?
+      # FIXME:(?) does anyone really like the autovivifying reader that we have and wants the same behavior?  readers that write?  ugh...
 
       def unlink(*path, last)
-        root.reset_cache
-        hash = read(*path)
-        return nil unless hash.is_a?(Hash)
+        hash = path.empty? ? self : read(*path)
+        return nil unless hash.is_a?(Hash) || hash.is_a?(Array)
+        root.top_level_breadcrumb ||= last
         hash.delete(last)
       end
 
       def unlink!(*path)
-        raise "not implemented"
+        raise Chef::Exceptions::NoSuchAttribute unless exist?(*path)
+        unlink(*path)
       end
 
       def convert_key(key)
